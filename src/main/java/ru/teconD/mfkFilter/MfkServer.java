@@ -1,6 +1,7 @@
 package ru.teconD.mfkFilter;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URISyntaxException;
@@ -21,6 +22,8 @@ public final class MfkServer {
     private static final Logger LOGGER = Logger.getLogger(MfkServer.class.getName());
 
     private static volatile MfkServer instance;
+
+    private String localHost;
 
     static String remoteHost;
     static List<String> permitData = new ArrayList<>();
@@ -62,8 +65,13 @@ public final class MfkServer {
             return;
         }
 
-        serverSocket = new ServerSocket(20100, 100);
-        LOGGER.info("created server socket");
+        if ((localHost != null) && (!localHost.equals(""))) {
+            serverSocket = new ServerSocket(20100, 100, InetAddress.getByName(localHost));
+            LOGGER.log(Level.INFO, "created server socket for local address {0}", localHost);
+        } else {
+            serverSocket = new ServerSocket(20100, 100);
+            LOGGER.info("created server socket");
+        }
 
         Socket socket;
 
@@ -96,5 +104,9 @@ public final class MfkServer {
 
     public void setRemoteHost(String remoteHost) {
         MfkServer.remoteHost = remoteHost;
+    }
+
+    public void setLocalHost(String localHost) {
+        this.localHost = localHost;
     }
 }

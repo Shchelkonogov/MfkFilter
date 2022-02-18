@@ -30,10 +30,14 @@ public class Main {
         }));
 
         String remoteHost = null;
+        String localHost = null;
 
         for (String arg: args) {
             if (arg.startsWith("-remote=")) {
                 remoteHost = arg.replaceFirst("-remote=", "");
+            }
+            if (arg.startsWith("-local=")) {
+                localHost = arg.replaceFirst("-local=", "");
             }
         }
 
@@ -43,6 +47,7 @@ public class Main {
         }
 
         mfkServer.setRemoteHost(remoteHost);
+        mfkServer.setLocalHost(localHost);
 
         try {
             mfkServer.start();
