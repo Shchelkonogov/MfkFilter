@@ -66,10 +66,10 @@ public final class MfkServer {
         }
 
         if ((localHost != null) && (!localHost.equals(""))) {
-            serverSocket = new ServerSocket(20100, 100, InetAddress.getByName(localHost));
+            serverSocket = new ServerSocket(20100, 10, InetAddress.getByName(localHost));
             LOGGER.log(Level.INFO, "created server socket for local address {0}", localHost);
         } else {
-            serverSocket = new ServerSocket(20100, 100);
+            serverSocket = new ServerSocket(20100, 10);
             LOGGER.info("created server socket");
         }
 
