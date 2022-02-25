@@ -4,6 +4,7 @@ import ru.teconD.mfkFilter.MfkServer;
 
 import java.io.IOException;
 import java.util.logging.Level;
+import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
 /**
@@ -13,7 +14,9 @@ public class Main {
 
     private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/log.properties"));
+
         MfkServer mfkServer = MfkServer.getInstance();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
