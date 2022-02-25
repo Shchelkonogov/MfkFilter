@@ -11,5 +11,5 @@ public interface Filter<T> {
      * @param t входные данные, для фильтрафции
      * @return отфильтрованные данные
      */
-    T filter(T t);
+    T filter(T t) throws FilterException;
 }
