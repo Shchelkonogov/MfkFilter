@@ -10,8 +10,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * Класс сервер для получения данных от контроллера MFK
@@ -23,12 +26,14 @@ public final class MfkServer {
 
     private static volatile MfkServer instance;
 
-    private String localHost;
+    static volatile boolean block = false;
 
     static String remoteHost;
     static List<String> permitData = new ArrayList<>();
 
+    private String localHost;
     private ServerSocket serverSocket;
+    private ThreadPoolExecutor service;
 
     private MfkServer() throws IOException, NoSuchFieldException, URISyntaxException {
         Path path = Paths.get(MfkServer.class.getProtectionDomain().getCodeSource().getLocation().toURI())
@@ -73,17 +78,35 @@ public final class MfkServer {
             LOGGER.info("created server socket");
         }
 
-        Socket socket;
+        BlockingQueue<Runnable> boundedQueue = new ArrayBlockingQueue<>(10);
+        service = new ThreadPoolExecutor(10, 10, 60, SECONDS, boundedQueue, new ThreadPoolExecutor.AbortPolicy());
 
         while (!serverSocket.isClosed()) {
             try {
-                socket = serverSocket.accept();
-                new MfkClient(socket);
+                Socket socket = serverSocket.accept();
+
+                LOGGER.log(Level.INFO, "new socket {0}", socket.getRemoteSocketAddress());
+
+                if (block) {
+                    LOGGER.info("one connection is already accepted. This connection is ignore");
+
+                    service.submit(new MfkClientIgnore(socket));
+                } else {
+                    block = true;
+                    service.submit(new MfkClient(socket));
+
+                    LOGGER.log(Level.INFO, "thread statistic pool size = {0}, active threads = {1}, queued tasks = {2}, completed tasks = {3}",
+                            new Object[] {service.getPoolSize(), service.getActiveCount(), service.getQueue().size(), service.getCompletedTaskCount()});
+                }
             } catch (IOException e) {
                 if (!serverSocket.isClosed()) {
                     LOGGER.log(Level.WARNING, "error create socket connection", e);
                 } else {
                     LOGGER.warning("Server socket is closed");
+                }
+            } catch (RejectedExecutionException ignore) {
+                if (block) {
+                    block = false;
                 }
             }
         }
@@ -99,6 +122,10 @@ public final class MfkServer {
             } catch (IOException e) {
                 LOGGER.log(Level.WARNING, "error close server socket", e);
             }
+        }
+
+        if ((service != null) && !service.isShutdown()) {
+            service.shutdown();
         }
     }
 
