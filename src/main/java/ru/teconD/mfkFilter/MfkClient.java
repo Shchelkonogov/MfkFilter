@@ -18,23 +18,15 @@ final class MfkClient extends Thread {
 
     private static final Logger LOGGER = Logger.getLogger(MfkClient.class.getName());
 
+    private Set<String> cache = new HashSet<>();
+
     private Socket mfkSocket;
-    private Socket driverSocket;
 
     private byte protocolVersion = 2;
     private int messagesCount = 0;
 
     MfkClient(Socket mfkSocket) {
         this.mfkSocket = mfkSocket;
-
-        try {
-            this.driverSocket = new Socket(MfkServer.remoteHost, 20100);
-            driverSocket.setSoTimeout(10000);
-
-            start();
-        } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "error create sockets", e);
-        }
     }
 
     @Override
@@ -44,8 +36,11 @@ final class MfkClient extends Thread {
 
         try (DataInputStream mfkIn = new DataInputStream(new BufferedInputStream(mfkSocket.getInputStream()));
              BufferedOutputStream mfkOut = new BufferedOutputStream(mfkSocket.getOutputStream());
+             Socket driverSocket = new Socket(MfkServer.remoteHost, 20100);
              DataInputStream driverIn = new DataInputStream(new BufferedInputStream(driverSocket.getInputStream()));
              BufferedOutputStream driverOut = new BufferedOutputStream(driverSocket.getOutputStream())) {
+            driverSocket.setSoTimeout(10000);
+
             while (true) {
                 try {
                     LOGGER.info("wait data from mfk");
@@ -90,6 +85,10 @@ final class MfkClient extends Thread {
                                     }
 
                                     LOGGER.log(Level.INFO, "message count before filtering {0} and after filtering {1}", new Object[] {messagesCount, newMessageCount});
+
+                                    if (newMessageCount == 0) {
+                                        throw new FilterException("no message to send");
+                                    }
 
                                     // Устанавливаем новый размер пакета
                                     byte[] packageBuffer = ByteBuffer.allocate(4).putInt(bytes.length - 2).array();
@@ -139,15 +138,47 @@ final class MfkClient extends Thread {
                     });
                 } catch (IOException e) {
                     LOGGER.log(Level.WARNING, "error with filtering data", e);
-
-                    try {
-                        driverSocket.close();
-                    } catch (IOException ignore) {
-                    }
                     return;
+                } catch (FilterException e) {
+                    if (e.getMessage().equals("no message to send")) {
+                        int messageConfirmSize;
+                        switch (protocolVersion) {
+                            case 1:
+                                messageConfirmSize = 2;
+                                break;
+                            case 2:
+                            default:
+                                messageConfirmSize = 3;
+                        }
+
+                        byte[] response = new byte[messageConfirmSize + 2];
+                        response[0] = 0;
+                        response[1] = (byte) messageConfirmSize;
+                        response[2] = (byte) 4;
+
+                        byte[] messageCountArray = ByteBuffer.allocate(4).putInt(messagesCount).array();
+
+                        switch (messageConfirmSize) {
+                            case 3:
+                                response[3] = messageCountArray[2];
+                                response[4] = messageCountArray[3];
+                                break;
+                            case 2:
+                            default:
+                                response[3] = messageCountArray[3];
+                        }
+
+                        LOGGER.info("send load message ok");
+
+                        mfkOut.write(response);
+                        mfkOut.flush();
+                    }
                 }
             }
-        } catch (IOException ignore) {
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "error create driver sockets", e);
+        } finally {
+            MfkServer.block = false;
         }
     }
 
@@ -158,7 +189,7 @@ final class MfkClient extends Thread {
      * @param filter фильтр
      * @throws IOException в случае ошибки работы с потоками
      */
-    private void transferDataWithFilter(DataInputStream in, OutputStream out, Filter<byte[]> filter) throws IOException {
+    private void transferDataWithFilter(DataInputStream in, OutputStream out, Filter<byte[]> filter) throws IOException, FilterException {
         byte[] sizeBytes = new byte[2];
 
         if (in.read(sizeBytes, 0, 2) != -1) {
@@ -285,6 +316,7 @@ final class MfkClient extends Thread {
                 }
 
 //                LOGGER.log(Level.INFO, "bufferNumber {0} eventCode {1} size {2} startIndex {3} endIndex {4}",  new Object[]{bufferNumber, eventCode, dataCount, i, i + add});
+                cache.add(bufferNumber + "/" + eventCode + "/" + dataCount);
 
                 if (!MfkServer.permitData.contains(bufferNumber + "/" + eventCode + "/" + dataCount)) {
                     remove.add(new RemoveIndex(i, add));
@@ -295,6 +327,8 @@ final class MfkClient extends Thread {
         } catch (IndexOutOfBoundsException e) {
             LOGGER.log(Level.WARNING, "Pars data error:", e);
         }
+
+        LOGGER.log(Level.INFO, "cache group {0}", cache);
 
         return repeatCount;
     }
