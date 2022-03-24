@@ -1,6 +1,7 @@
 package ru.teconD;
 
 import ru.teconD.mfkFilter.MfkServer;
+import ru.teconD.mfkFilter.util.PasswordReader;
 
 import java.io.IOException;
 import java.util.logging.Level;
@@ -44,10 +45,14 @@ public class Main {
             }
         }
 
+        PasswordReader reader = new PasswordReader();
+
         if ((remoteHost == null) || remoteHost.equals("")) {
             LOGGER.warning("remote host parameter required (-remote=<value>)");
-            return;
+            remoteHost = reader.readLine("enter remote host: ");
         }
+
+        LOGGER.log(Level.INFO, "init parameters remoteHost: {0} localHost: {1}", new Object[] {remoteHost, localHost});
 
         mfkServer.setRemoteHost(remoteHost);
         mfkServer.setLocalHost(localHost);
