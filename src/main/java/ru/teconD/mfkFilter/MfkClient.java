@@ -58,6 +58,10 @@ final class MfkClient extends Thread {
                                     default:
                                         protocolVersion = 1;
                                 }
+
+                                // Фиксируем номер контроллера в системе, что бы слушать оба контроллера,
+                                // иначе из-за разных номеров слетает линковка объекта
+                                bytes[5] = 1;
                                 break;
                             case 3:
                                 LOGGER.info("data package");
