@@ -9,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -32,6 +34,7 @@ public final class MfkServer {
     static List<String> permitData = new ArrayList<>();
 
     private String localHost;
+    private Set<String> permitHosts = new HashSet<>();
     private ServerSocket serverSocket;
     private ThreadPoolExecutor service;
 
@@ -87,7 +90,7 @@ public final class MfkServer {
 
                 LOGGER.log(Level.INFO, "new socket {0}", socket.getRemoteSocketAddress());
 
-                if (block) {
+                if (block || !permitHosts.contains(socket.getInetAddress().getHostAddress())) {
                     LOGGER.info("one connection is already accepted. This connection is ignore");
 
                     service.submit(new MfkClientIgnore(socket));
@@ -135,5 +138,9 @@ public final class MfkServer {
 
     public void setLocalHost(String localHost) {
         this.localHost = localHost;
+    }
+
+    public void setPermitHosts(Set<String> permitHosts) {
+        this.permitHosts = permitHosts;
     }
 }
